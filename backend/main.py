@@ -67,24 +67,24 @@ def get_gemini():
             _gemini_service = MockGeminiService()
     return _gemini_service
 
-    # Use real ORS if API key is provided, otherwise fall back to mock
-    api_key = os.getenv('ORS_API_KEY')
-    if api_key:
-        logger.info('Initializing real ORSService')
-        _ors_service = ORSService(api_key)
-    else:
-        logger.info('Using MockORSService for ORS interactions')
-        _ors_service = MockORSService()
+def get_ors():
+    global _ors_service
+    if _ors_service is None:
+        api_key = os.getenv('ORS_API_KEY')
+        if api_key and ORSService:
+            logger.info('Initializing real ORSService')
+            _ors_service = ORSService(api_key)
+        else:
+            logger.info('Using MockORSService for ORS interactions')
+            _ors_service = MockORSService()
+    return _ors_service
 
 # ── Routes ──────────────────────────────────────────────────────────────────
 
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "gemini_configured": bool(GEMINI_API_KEY),
-        "ors_configured": bool(ORS_API_KEY)
-    }
+@app.get("/")
+async def root():
+    return {"message": "TravelPlanner API is running. Visit /docs for Swagger UI."}
+
 
 @app.post("/api/intent", response_model=TripIntentResponse)
 async def extract_intent(request: TripIntentRequest):
