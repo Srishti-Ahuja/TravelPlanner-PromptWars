@@ -1,7 +1,7 @@
 import React from 'react';
 import { CheckCircle2, Circle, Navigation, Clock } from 'lucide-react';
 
-const ItineraryList = ({ markers, selectedPoints, onTogglePoint, onGenerate, itinerary }) => {
+const ItineraryList = ({ markers, selectedPoints, onTogglePoint, onGenerate }) => {
   return (
     <div 
       id="itinerary-list"
@@ -52,26 +52,7 @@ const ItineraryList = ({ markers, selectedPoints, onTogglePoint, onGenerate, iti
         </button>
       )}
 
-      {itinerary && (
-        <div className="border-t pt-6 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
-          <div className="flex justify-between text-sm font-semibold">
-            <span className="flex items-center gap-1"><Navigation size={14}/> {itinerary.total_distance}</span>
-            <span className="flex items-center gap-1"><Clock size={14}/> {itinerary.total_duration}</span>
-          </div>
-          
-          <div className="space-y-4 relative before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100">
-            {itinerary.steps.map((step, idx) => (
-              <div key={idx} className="relative pl-8 text-xs">
-                <div className="absolute left-0 top-1 w-5 h-5 bg-white border-2 border-primary rounded-full flex items-center justify-center text-[10px] font-bold text-primary">
-                  {idx + 1}
-                </div>
-                <div dangerouslySetInnerHTML={{ __html: step.instruction }} />
-                <div className="text-text-secondary mt-1">{step.distance} • {step.duration}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Static itinerary directions removed in favor of Gemini Chat */}
     </div>
   );
 };

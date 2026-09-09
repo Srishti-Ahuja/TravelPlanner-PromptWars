@@ -1,85 +1,130 @@
 import os
-from fastapi import FastAPI, Depends, HTTPException
+import logging
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from models.schemas import TripIntentRequest, TripIntentResponse, ItineraryRequest, ItineraryResponse
-from services.gemini_service import GeminiService
-from services.maps_service import MapsService
-from services.secret_service import SecretService
-from services.logging_service import LoggingService
-from middleware.iap_auth import IAPAuthMiddleware
+from dotenv import load_dotenv
+load_dotenv()
+
+from .models.schemas import TripIntentRequest, TripIntentResponse, ItineraryRequest, ItineraryResponse, ItineraryChatRequest, ItineraryChatResponse
+from .services.gemini_service import GeminiService
+try:
+    from .services.ors_service import ORSService
+except Exception:
+    ORSService = None  # Fallback if ORSService not available
+
+# Configure stdlib logging (visible in Render dashboard)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("orbit_app")
 
 app = FastAPI(title="Orbit Travel Engine")
 
-# CORS configuration
+# CORS — allow all origins (lock down to frontend URL in production if needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Adjust for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Project Configuration
-PROJECT_ID = "travelplanner-495705"
-ENV = os.getenv("ENV", "dev")
+# Read secrets from environment variables (set in Render dashboard)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+ORS_API_KEY = os.environ.get("ORS_API_KEY", "")
 
-# Initialize Services
-secret_service = SecretService(PROJECT_ID)
-logger = LoggingService(PROJECT_ID)
+# Lazy-initialized service instances
+_gemini_service = None
+_ors_service = None
 
-# Global service instances (initialized on first request if keys available)
-gemini_service = None
-maps_service = None
+class MockGeminiService:
+    async def chat_itinerary(self, points, chat_history, user_message):
+        # Simple mock response for testing without real Gemini API
+        return f"Mock response for message: {user_message}" 
+    async def parse_trip_intent(self, query):
+        return {"intent": "mock", "cities": [], "markers": []}
 
-def get_services():
-    global gemini_service, maps_service
-    if not gemini_service or not maps_service:
-        MAPS_API_KEY = secret_service.get_secret("MAPS_API_KEY")
-        GEMINI_API_KEY = secret_service.get_secret("GEMINI_API_KEY")
-        
-        if MAPS_API_KEY and not maps_service:
-            maps_service = MapsService(MAPS_API_KEY)
-        if GEMINI_API_KEY and not gemini_service:
-            gemini_service = GeminiService(GEMINI_API_KEY)
-    
-    return gemini_service, maps_service
+class MockORSService:
+    def get_optimized_itinerary(self, points):
+        if len(points) < 2:
+            return {"error": "At least two points required."}
+        polyline = [{"lat": p.lat, "lng": p.lng} for p in points]
+        steps = [{"instruction": f"Visit {getattr(p, 'name', 'point')}", "distance": "0 km", "duration": "0 min"} for p in points]
+        return {"steps": steps, "total_distance": "0 km", "total_duration": "0 min", "map_polyline": polyline}
 
-# Routes
+# Modify get_gemini to use mock when key not set
+def get_gemini():
+    global _gemini_service
+    if _gemini_service is None:
+        # Use real Gemini if API key is provided, otherwise fall back to mock
+        api_key = os.getenv('GEMINI_API_KEY')
+        if api_key:
+            logger.info('Initializing real GeminiService')
+            _gemini_service = GeminiService(api_key)
+        else:
+            logger.info('Using MockGeminiService for Gemini interactions')
+            _gemini_service = MockGeminiService()
+    return _gemini_service
+
+    # Use real ORS if API key is provided, otherwise fall back to mock
+    api_key = os.getenv('ORS_API_KEY')
+    if api_key:
+        logger.info('Initializing real ORSService')
+        _ors_service = ORSService(api_key)
+    else:
+        logger.info('Using MockORSService for ORS interactions')
+        _ors_service = MockORSService()
+
+# ── Routes ──────────────────────────────────────────────────────────────────
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "gemini_configured": bool(GEMINI_API_KEY),
+        "ors_configured": bool(ORS_API_KEY)
+    }
+
 @app.post("/api/intent", response_model=TripIntentResponse)
 async def extract_intent(request: TripIntentRequest):
-    logger.info(f"Processing trip intent for: {request.query}")
-    g_service, _ = get_services()
-    if not g_service:
-        raise HTTPException(status_code=503, detail="Gemini service not initialized. Check API keys.")
+    logger.info(f"Intent request: {request.query}")
     try:
-        result = await g_service.parse_trip_intent(request.query)
+        result = await get_gemini().parse_trip_intent(request.query)
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in extract_intent: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/itinerary", response_model=ItineraryResponse)
 async def generate_itinerary(request: ItineraryRequest):
-    logger.info(f"Generating itinerary for {len(request.points)} points")
-    _, m_service = get_services()
-    if not m_service:
-        raise HTTPException(status_code=503, detail="Maps service not initialized. Check API keys.")
+    logger.info(f"Itinerary request for {len(request.points)} points: {request.points}")
     try:
-        result = m_service.get_optimized_itinerary(request.points)
+        result = get_ors().get_optimized_itinerary(request.points)
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
-        
-        # Record custom metric
-        logger.record_itinerary_generation()
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in generate_itinerary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+@app.post("/api/itinerary/chat", response_model=ItineraryChatResponse)
+async def chat_itinerary(request: ItineraryChatRequest):
+    logger.info(f"Itinerary chat request for {len(request.points)} points with message: {request.user_message}")
+    try:
+        response_text = await get_gemini().chat_itinerary(request.points, request.chat_history, request.user_message)
+        return ItineraryChatResponse(message=response_text)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in chat_itinerary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 10001))
+    uvicorn.run(app, host="0.0.0.0", port=port)

@@ -10,7 +10,7 @@ const ChatBox = ({ onMarkersUpdate, onIntentUpdate }) => {
   // Debounce logic
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (query.trim().length > 5) {
+      if (query.trim().length >= 3) {
         handleSearch(query);
       }
     }, 500);
@@ -18,18 +18,28 @@ const ChatBox = ({ onMarkersUpdate, onIntentUpdate }) => {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const handleSearch = async (text) => {
+    const handleSearch = async (text) => {
+    console.log('Initiating intent request with query:', text);
     setIsLoading(true);
     try {
-      const response = await axios.post('https://orbit-backend-122423798285.us-central1.run.app/api/intent', { query: text });
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000';
+      console.log('ChatBox backendUrl:', backendUrl);
+      // Debug UI: show backend URL below input
+      const debugBackendUrl = backendUrl;
+      const requestUrl = `${backendUrl}/api/intent`;
+      console.log('Request URL:', requestUrl);
+      const response = await axios.post(requestUrl, { query: text });
+      console.log('Intent response received:', response.data);
       onMarkersUpdate(response.data.markers);
       onIntentUpdate(response.data.intent);
     } catch (error) {
-      console.error("Error fetching intent:", error);
+      console.error('Error fetching intent:', error.message || error);
+        console.error('Full error:', error);
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-50">
@@ -46,7 +56,11 @@ const ChatBox = ({ onMarkersUpdate, onIntentUpdate }) => {
           aria-label="Trip planning chatbox"
         />
         <button 
-          onClick={() => handleSearch(query)}
+          type="button"
+          onClick={() => {
+            console.log('Search button clicked with query:', query);
+            handleSearch(query);
+          }}
           className="btn-primary p-3 aspect-square flex items-center justify-center"
           disabled={isLoading}
           aria-label="Send query"
@@ -54,6 +68,7 @@ const ChatBox = ({ onMarkersUpdate, onIntentUpdate }) => {
           {isLoading ? <Loader2 className="animate-spin" /> : <Send size={20} />}
         </button>
       </div>
+
       
       {/* Visual indicator for typing/thinking */}
       {isLoading && (

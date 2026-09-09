@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import OrbitMap from './components/Map/OrbitMap';
 import ChatBox from './components/Chat/ChatBox';
 import ItineraryList from './components/Itinerary/ItineraryList';
+import ItineraryChat from './components/Itinerary/ItineraryChat';
 import { Sun, Moon } from 'lucide-react';
 
 function App() {
@@ -11,6 +13,7 @@ function App() {
   const [selectedPoints, setSelectedPoints] = useState([]);
   const [itinerary, setItinerary] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [chatActive, setChatActive] = useState(false);
 
   const togglePoint = (name) => {
     setSelectedPoints(prev => 
@@ -18,16 +21,32 @@ function App() {
     );
   };
 
-  const generateItinerary = async () => {
-    try {
-      const response = await axios.post('https://orbit-backend-122423798285.us-central1.run.app/api/itinerary', { 
-        points: selectedPoints 
-      });
-      setItinerary(response.data);
-    } catch (error) {
-      console.error("Error generating itinerary:", error);
-    }
+  const generateItinerary = () => {
+    setChatActive(true);
   };
+
+  useEffect(() => {
+    if (chatActive && selectedPoints.length >= 2) {
+      const fetchRoute = async () => {
+        try {
+          const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000';
+          const points = selectedPoints.map(name => {
+            const marker = markers.find(m => m.name === name);
+            if (!marker) {
+              console.warn(`Marker for ${name} not found`);
+              return null;
+            }
+            return { name: marker.name, lat: marker.lat, lng: marker.lng };
+          }).filter(p => p !== null);
+          const response = await axios.post(`${backendUrl}/api/itinerary`, { points });
+          setItinerary(response.data);
+        } catch (error) {
+          console.error("Error generating itinerary route:", error);
+        }
+      };
+      fetchRoute();
+    }
+  }, [selectedPoints, chatActive, markers]);
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
@@ -39,6 +58,7 @@ function App() {
       {/* Background Map */}
       <OrbitMap 
         markers={markers} 
+        selectedPoints={selectedPoints}
         polyline={itinerary?.map_polyline} 
       />
 
@@ -62,8 +82,17 @@ function App() {
         selectedPoints={selectedPoints}
         onTogglePoint={togglePoint}
         onGenerate={generateItinerary}
-        itinerary={itinerary}
       />
+
+      {chatActive && (
+        <div className="fixed top-24 right-8 w-[400px] h-[calc(100vh-140px)] z-40">
+          <ItineraryChat 
+            selectedPoints={selectedPoints} 
+            markers={markers} 
+            onBack={() => setChatActive(false)} 
+          />
+        </div>
+      )}
 
       <ChatBox 
         onMarkersUpdate={setMarkers} 

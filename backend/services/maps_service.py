@@ -1,4 +1,5 @@
 import googlemaps
+import traceback
 from datetime import datetime
 from typing import List, Dict
 
@@ -15,13 +16,17 @@ class MapsService:
 
         # Request directions with waypoint optimization
         now = datetime.now()
-        directions_result = self.gmaps.directions(
-            origin=points[0],
-            destination=points[-1],
-            waypoints=points[1:-1],
-            optimize_waypoints=True,
-            departure_time=now
-        )
+        try:
+            directions_result = self.gmaps.directions(
+                origin=points[0],
+                destination=points[-1],
+                waypoints=points[1:-1],
+                optimize_waypoints=True
+            )
+        except Exception as e:
+            print(f"Error in gmaps.directions: {e}")
+            print(traceback.format_exc())
+            return {"error": f"Maps API error: {e}"}
 
         if not directions_result:
             return {"error": "No route found."}

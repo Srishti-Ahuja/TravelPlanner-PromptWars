@@ -127,6 +127,8 @@
     text-decoration: none;
     transition: box-shadow 0.3s;
 
+
+
     &:hover {
       box-shadow: var(--shadow);
     }
@@ -181,4 +183,9 @@
     right: 0;
     border-right-color: var(--border);
   }
+}
+.leaflet-tooltip {
+  z-index: 2000 !important;
+  font-size: 0.85rem !important;
+  max-width: 200px;
 }
