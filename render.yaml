@@ -2,7 +2,7 @@ services:
   - type: web
     name: travelplanner-backend
     env: docker
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: backend/Dockerfile
     envVars:
       - key: GEMINI_API_KEY
         value: ${GEMINI_API_KEY}
