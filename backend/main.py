@@ -81,9 +81,7 @@ def get_ors():
 
 # ── Routes ──────────────────────────────────────────────────────────────────
 
-@app.get("/")
-async def root():
-    return {"message": "TravelPlanner API is running. Visit /docs for Swagger UI."}
+
 
 
 @app.post("/api/intent", response_model=TripIntentResponse)
