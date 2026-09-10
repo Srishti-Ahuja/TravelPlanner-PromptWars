@@ -13,10 +13,11 @@ services:
     autoDeploy: true
     healthCheckPath: /health
 
-staticSites:
+static_sites:
   - name: travelplanner-frontend
+    type: static
     env: static
-    buildCommand: npm ci && npm run build
+    buildCommand: cd frontend && npm ci && npm run build
     publishPath: ./frontend/dist
     envVars:
       - key: VITE_BACKEND_URL
